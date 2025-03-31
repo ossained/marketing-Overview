@@ -292,11 +292,33 @@ select id,
 case  when score >=14 then 'High value customers'
       when score between 10 and 13 then 'Loyal customers'
 	  else 'Average customers' end as customer_segment
-from score)
+from score),
+not_average_customers as (
+select * from customer_segments
+where customer_segment != 'Average customers'),
+high_response_customer as(
+select ma.id from not_average_customers n
+left join most_Accepted ma on n.id = ma.id
+where ma.id  is not null)
 
-select customer_segment,count(c.ID) as cnt_cutomersegment ,count(m.id)cnt_customers,
+select n.id from not_average_customers n
+left join most_Accepted ma on n.id = ma.id
+where ma.id  is null and customer_segment in ('loyal customers','high value customers')
+
+
+select customer_segment,count(c.ID) as cnt_cutomersegment ,count(m.id)cmp6,
 (count(m.id)* 100.0) / count(c.id) as percentage
 from customer_segments c
 left join marketing_data m on c.id =m.id
 and  m.AcceptedCmp6 = 1
 group by customer_segment
+
+
+select count(*) from marketing_data
+where AcceptedCmp6 =1
+
+select cast((count(*)* 0.17) -
+ (sum(case when AcceptedCmp6 =1 then 1 else 0 end))as int) from marketing_data
+
+
+ select * from most_Accepted
