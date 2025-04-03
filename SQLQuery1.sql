@@ -241,7 +241,7 @@ WITH AggregatedData AS (
         SUM(NumStorePurchases + NumWebPurchases + NumCatalogPurchases) AS Frequency,
         SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) AS Monetary
     FROM marketing_data
-    GROUP BY ID
+    GROUP BY ID----checking for RFM data
 ),
 
 percentile_values AS (
@@ -259,9 +259,9 @@ percentile_values AS (
         PERCENTILE_CONT(0.4) WITHIN GROUP (ORDER BY Recency) OVER () AS p40_r,
         PERCENTILE_CONT(0.6) WITHIN GROUP (ORDER BY Recency) OVER () AS p60_r,
         PERCENTILE_CONT(0.8) WITHIN GROUP (ORDER BY Recency) OVER () AS p80_r
-       FROM AggregatedData),
+       FROM AggregatedData),-------grouping them in different bins
 	   
-	   rfm_segments AS (
+rfm_segments AS (
 SELECT a.ID, a.Recency, a.Frequency, a.Monetary,
 CASE WHEN a.Monetary <= p.p20_m THEN 1
      WHEN a.Monetary <= p.p40_m THEN 2
@@ -283,63 +283,61 @@ CASE
                ELSE 1
            END AS Recency_Segment
     FROM AggregatedData a
-    CROSS JOIN percentile_values p),
+    CROSS JOIN percentile_values p),---Segmenting them base on RFM
 score as (
 	select id,Monetary_Segment+Frequency_Segment+Recency_Segment as score 
 	from rfm_segments),
+
 customer_segments as (
 select id,
 case  when score >=14 then 'High value customers'
       when score between 10 and 13 then 'Loyal customers'
 	  else 'Average customers' end as customer_segment
-from score)
+from score),----segmenting customers base on values 
 
-select customer_segment,count(customer_segment) from customer_segments c
-join most_Accepted m on c.id =m.id
-
-group by customer_segment
 not_average_customers as (
 select c.id from customer_segments c
 join marketing_data m on c.ID= m.id
 where customer_segment in ('loyal customers','high value customers')
-and AcceptedCmp6= 1 ),
+and AcceptedCmp6= 1 ),-----number of loyal and high value customers
 
 accepted_more as (
 select a.id from not_average_customers a
-join most_Accepted m on a.id= m.id),
+join most_Accepted m on a.id= m.id),---customers that accepted campaign 6 and more 
 
 accepted_cmp6 as (
 select id from not_average_customers
 where id not in
-(select id from most_Accepted)),
+(select id from most_Accepted)),---customres that didnt accept campaing 6 and more
 
-average_five as (
-select c.id from customer_segments c
-right join most_Accepted m on c.id = m.id
-join marketing_data d on d.id = m.id
-where customer_segment= 'average customers'
-and AcceptedCmp6 = 1),
 
  highest_purchase as (
 select id,SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) AS Monetary
     FROM marketing_data 
-	where recency <30
+	where recency <30----getting new customers to target base on highest purchase
 	group by id 
 	having SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds)>2000
 	),
-	highest_income as (
+highest_income as (
 	select id,sum(income) as income from marketing_data
 	group by id
-	having  sum(income) >100000
+	having  sum(income) >90000----getting new customers to target base on income above 90,00
 	),
  union_id as (
 select id from highest_purchase 
 union 
-select id from highest_income)
+select id from highest_income),---combining both highest purchase and highest income together 
 
+added_customers as (
 select id from union_id 
 where id not in (select id from marketing_data
-where AcceptedCmp6=1)
+where AcceptedCmp6=1))-------number of new customers to be added to targeted customers
+
+
+select m.ID from marketing_data m
+where m.AcceptedCmp6 =1
+union 
+select id from added_customers ---total number of targeted pontential customers to accept next campaign
 
 
 
@@ -355,33 +353,3 @@ where AcceptedCmp6=1)
 
 
 
-not_average_customers as (
-select * from customer_segments
-where customer_segment != 'Average customers'),
-
-high_response_customer as(
-select ma.id from not_average_customers n
-left join most_Accepted ma on n.id = ma.id
-where ma.id  is not null)
-
-select c.ID from customer_segments c
-join marketing_data m on c.customer_segment= m.ID
-where --customer_segment in ('high value customer','loyal customer') 
- AcceptedCmp6 =1
-
-select customer_segment,count(c.ID) as cnt_cutomersegment ,count(m.id)cmp6,
-(count(m.id)* 100.0) / count(c.id) as percentage
-from customer_segments c
-left join marketing_data m on c.id =m.id
-and  m.AcceptedCmp6 = 1
-group by customer_segment
-
-
-select count(*) from marketing_data
-where AcceptedCmp6 =1
-
-select cast((count(*)* 0.17) -
- (sum(case when AcceptedCmp6 =1 then 1 else 0 end))as int) from marketing_data
-
-
- select * from most_Accepted
