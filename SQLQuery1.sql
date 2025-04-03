@@ -292,19 +292,82 @@ select id,
 case  when score >=14 then 'High value customers'
       when score between 10 and 13 then 'Loyal customers'
 	  else 'Average customers' end as customer_segment
-from score),
+from score)
+
+select customer_segment,count(customer_segment) from customer_segments c
+join most_Accepted m on c.id =m.id
+
+group by customer_segment
+not_average_customers as (
+select c.id from customer_segments c
+join marketing_data m on c.ID= m.id
+where customer_segment in ('loyal customers','high value customers')
+and AcceptedCmp6= 1 ),
+
+accepted_more as (
+select a.id from not_average_customers a
+join most_Accepted m on a.id= m.id),
+
+accepted_cmp6 as (
+select id from not_average_customers
+where id not in
+(select id from most_Accepted)),
+
+average_five as (
+select c.id from customer_segments c
+right join most_Accepted m on c.id = m.id
+join marketing_data d on d.id = m.id
+where customer_segment= 'average customers'
+and AcceptedCmp6 = 1),
+
+ highest_purchase as (
+select id,SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) AS Monetary
+    FROM marketing_data 
+	where recency <30
+	group by id 
+	having SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds)>2000
+	),
+	highest_income as (
+	select id,sum(income) as income from marketing_data
+	group by id
+	having  sum(income) >100000
+	),
+ union_id as (
+select id from highest_purchase 
+union 
+select id from highest_income)
+
+select id from union_id 
+where id not in (select id from marketing_data
+where AcceptedCmp6=1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 not_average_customers as (
 select * from customer_segments
 where customer_segment != 'Average customers'),
+
 high_response_customer as(
 select ma.id from not_average_customers n
 left join most_Accepted ma on n.id = ma.id
 where ma.id  is not null)
 
-select n.id from not_average_customers n
-left join most_Accepted ma on n.id = ma.id
-where ma.id  is null and customer_segment in ('loyal customers','high value customers')
-
+select c.ID from customer_segments c
+join marketing_data m on c.customer_segment= m.ID
+where --customer_segment in ('high value customer','loyal customer') 
+ AcceptedCmp6 =1
 
 select customer_segment,count(c.ID) as cnt_cutomersegment ,count(m.id)cmp6,
 (count(m.id)* 100.0) / count(c.id) as percentage
