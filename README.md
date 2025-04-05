@@ -200,7 +200,7 @@ This approach identified **28 new customers** who are likely to engage. Adding t
 
 ---
 
-### 💡 **Recommendations**
+### **Recommendations**
 
 1. **Adopt the Enhanced Targeting Strategy**  
    Launch the upcoming campaign to the 362 selected customers those identified from Campaign 6 and the newly added segment to boost response outcomes.
@@ -214,7 +214,7 @@ This approach identified **28 new customers** who are likely to engage. Adding t
 
 ---
 
-### ✅ **Conclusion**
+###  **Conclusion**
 Employing RFM analysis captured high probability responders for the subsequent campaign without issue. Considering all previously responsive customers and the newly responsive customers based on recency and income, the campaign is set to hit a **16.2% expected response rate**, surpassing the initial estimate of 15%. If the outlined strategy is placed under close observation, it will assist in succeeding future marketing endeavors.
 
 
