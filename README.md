@@ -204,6 +204,13 @@ This led to the identification of 28 more customers, increasing the total pool t
 
 ---
 
+### **Dashboard**
+![market-1](https://github.com/user-attachments/assets/73a1d880-bfd0-41f4-8f6a-ddf4c17a02b5)
+
+---
+
+
+
 ### **Recommendations**
 
 1.**Prioritize Priority Customers in Campaign Messaging**
