@@ -1,239 +1,187 @@
-select * from marketing_data
+﻿
+---INSIGHT----
+--  STEP 1: Data Preview and Initial Exploration
+SELECT * FROM marketing_data;
+SELECT * FROM most_Accepted;
 
+--  STEP 2: Check Overall Response Rate
+SELECT AVG(CAST(response AS INT)) * 100 AS overall_response_rate FROM marketing_data;
 
-select 
-avg(cast(response as int))* 100 as overall_res from marketing_data
-
-
-SELEct education,Marital_Status,
-    AVG(cast(Response as float)) * 100 AS response_rate
+--  STEP 3: Response Rate by Customer Demographics
+SELECT Education, Marital_Status,
+       AVG(CAST(Response AS FLOAT)) * 100 AS response_rate
 FROM marketing_data
 GROUP BY Education, Marital_Status
-ORDER BY response_rate DESC
+ORDER BY response_rate DESC;
 
+--  STEP 4: Rename Response Column for Clarity
+EXEC sp_rename 'marketing_data.response', 'AcceptedCmp6', 'COLUMN';
+
+--  STEP 5: Check Column Data Types
+SELECT COLUMN_NAME, DATA_TYPE 
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'marketing_data' AND COLUMN_NAME = 'AcceptedCmp1';
+
+--  STEP 6: Campaign Acceptance Summary
+WITH sum_m AS (
+  SELECT SUM(CASE WHEN AcceptedCmp1 = 1 THEN 1 ELSE 0 END) AS comp1,
+         SUM(CASE WHEN AcceptedCmp2 = 1 THEN 1 ELSE 0 END) AS comp2,
+         SUM(CASE WHEN AcceptedCmp3 = 1 THEN 1 ELSE 0 END) AS comp3,
+         SUM(CASE WHEN AcceptedCmp4 = 1 THEN 1 ELSE 0 END) AS comp4,
+         SUM(CASE WHEN AcceptedCmp5 = 1 THEN 1 ELSE 0 END) AS comp5,
+         SUM(CASE WHEN AcceptedCmp6 = 1 THEN 1 ELSE 0 END) AS comp6
+  FROM marketing_data
+),
+allrows AS (
+  SELECT COUNT(*) AS cnt FROM marketing_data
+),
+percentage_comp AS (
+  SELECT (comp1 * 1.0)/cnt AS comp1,
+         (comp2 * 1.0)/cnt AS comp2,
+         (comp3 * 1.0)/cnt AS comp3,
+         (comp4 * 1.0)/cnt AS comp4,
+         (comp5 * 1.0)/cnt AS comp5,
+         (comp6 * 1.0)/cnt AS comp6
+  FROM sum_m
+  CROSS JOIN allrows
+)
+SELECT AVG(comp1 + comp2 + comp3 + comp4 + comp5 + comp6) AS avg_percent 
+FROM percentage_comp;
+
+--  STEP 7: Identify Customers Responding Only to Campaign 6
 SELECT * FROM marketing_data
-WHERE RESPONSE <1 OR AcceptedCmp4 <1 or AcceptedCmp2 <1 or AcceptedCmp3 <1 or AcceptedCmp4 <1 or AcceptedCmp5 <1
+WHERE AcceptedCmp6 = 1 AND 
+      AcceptedCmp1 = 0 AND AcceptedCmp2 = 0 AND AcceptedCmp3 = 0 AND AcceptedCmp4 = 0 AND AcceptedCmp5 = 0;
 
+--  STEP 8: Create View - Customers Who Accepted Campaign 6 and At Least 2 Others
+CREATE VIEW most_Accepted AS
+WITH cte AS (
+    SELECT id,
+           CASE WHEN AcceptedCmp1 = 1 AND AcceptedCmp6 = 1 THEN id ELSE 0 END AS comp1,
+           CASE WHEN AcceptedCmp2 = 1 AND AcceptedCmp6 = 1 THEN id ELSE 0 END AS comp2,
+           CASE WHEN AcceptedCmp3 = 1 AND AcceptedCmp6 = 1 THEN id ELSE 0 END AS comp3,
+           CASE WHEN AcceptedCmp4 = 1 AND AcceptedCmp6 = 1 THEN id ELSE 0 END AS comp4,
+           CASE WHEN AcceptedCmp5 = 1 AND AcceptedCmp6 = 1 THEN id ELSE 0 END AS comp5
+    FROM marketing_data
+),
+accepted AS (
+  SELECT * FROM cte 
+  WHERE comp1 > 0 OR comp2 > 0 OR comp3 > 0 OR comp4 > 0 OR comp5 > 0
+),
+figure AS (
+  SELECT id, comp, figure 
+  FROM accepted
+  UNPIVOT (figure FOR comp IN (comp1, comp2, comp3, comp4, comp5)) AS unpvt
+),
+figure2 AS (
+  SELECT id, COUNT(*) AS figure
+  FROM figure
+  WHERE figure > 0
+  GROUP BY id
+)
+SELECT id FROM figure2 WHERE figure >= 2;
 
-/*The company�s marketing campaigns have a response rate below 10%, leading to ineffective 
-targeting, wasted marketing spend, and low customer engagement. A data-driven approach is
-needed to improve response rates by at least 15% through better segmentation, personalized offers, 
-and optimized marketing channels*/
+--  STEP 9: Calculate % of Customers Who Accepted ≥2 Campaigns + Campaign 6
+SELECT COUNT(id) * 100.0 / 
+      (SELECT COUNT(id) FROM marketing_data WHERE AcceptedCmp6 = 1) 
+FROM most_Accepted;
 
-
-EXEC sp_rename 'marketing_data.response', 'AcceptedCmp6', 'COLUMN'
-
-select COLUMN_NAME ,DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
-WHERE 
-
-TABLE_NAME= 'marketing_data'   
-and COLUMN_NAME ='AcceptedCmp1'
-
-with sum_m as (
- SELECT SUM (CASE WHEN AcceptedCmp1 = 1 then 1 else 0 end ) as comp1, 
-        sum (case when AcceptedCmp2 =1 then 1 else 0  end ) as comp2,
-		 sum (case when AcceptedCmp3 =1 then 1 else 0  end ) as comp3,
-		  sum (case when AcceptedCmp4 =1 then 1 else 0  end ) as comp4,
-		   sum (case when AcceptedCmp5 =1 then 1 else 0  end ) as comp5,
-		    sum (case when AcceptedCmp6 =1 then 1 else 0  end ) as comp6
-			from marketing_data),
-allrows as (
-select count(*) as cnt from marketing_data),
-
-percentage_comp as (
-
-select (comp1 * 1.0)/cnt as comp1,(comp2* 1.0)/cnt as comp2,(comp3* 1.0)/cnt as comp3,(comp4* 1.0)/cnt as comp4,(comp5* 1.0)/cnt as comp5,(comp6 *1.0 )/cnt as comp6
-from sum_m
-cross join allrows)
-  select AVG(comp1+comp2+comp3+comp4+comp5+comp6) as avg_percent from percentage_comp
-
-
-  select * from marketing_data
-  where AcceptedCmp6 =1 and AcceptedCmp1 = 0 and AcceptedCmp2= 0 
- and AcceptedCmp3= 0 and AcceptedCmp4=0 and AcceptedCmp5= 0
- 
- 
- create view most_Accepted as
-  
-  
-  with cte as (
-  select id,case when AcceptedCmp1 =1 and AcceptedCmp6=1 then ID else 0 end as comp1,
-	     case when AcceptedCmp2 =1 and AcceptedCmp6=1 then ID else 0 end as comp2,
-		 case when AcceptedCmp3 =1 and AcceptedCmp6=1 then ID else 0 end as comp3,
-		 case when AcceptedCmp4 =1 and AcceptedCmp6=1 then ID else 0 end as comp4,
-		 case when AcceptedCmp5 =1 and AcceptedCmp6=1 then ID else 0 end as comp5
-			  
-			  from marketing_data),
-  accepted as (
-  select * from cte 
-  where comp1>0 or  comp2>0 or  comp3>0 or comp4>0 or  comp5>0),
-
-  figure as (
- select id,comp,figure from accepted
-  unpivot( figure for comp in (comp1,comp2,comp3,comp4,comp5)) as unpvt),
-   figure2 as(
-  select id,count(*) as figure
-  from figure
-  where figure>0
-  group by ID)
-
-select id
-  from figure2
-  where figure>=2
-
-
-
-  --checking for % of customers that accepted more than 2 comp and accepted comp6
-  select count(id)* 100.0 / (select count (id) from marketing_data where AcceptedCmp6 = 1)
-  from most_Accepted
-  
-select * from marketing_data
-  
-  -- Test group: Customers who accepted campaign 6 but not enough other campaigns
-
-SELECT id,sum(Income),Education,Marital_Status,Country--appears to have low income
+--  STEP 10: Test Group - Limited Campaign Engagement
+SELECT id, SUM(Income), Education, Marital_Status, Country
 FROM marketing_data
-WHERE AcceptedCmp6 = 1
-  AND (AcceptedCmp1*1.0 + AcceptedCmp2*1.0 + AcceptedCmp3*1.0 + AcceptedCmp4*1.0 + AcceptedCmp5*1.0 + AcceptedCmp6*1.0) <= 2 
+WHERE AcceptedCmp6 = 1 AND
+      (AcceptedCmp1 + AcceptedCmp2 + AcceptedCmp3 + AcceptedCmp4 + AcceptedCmp5 + AcceptedCmp6) <= 2
+GROUP BY id, Education, Marital_Status, Country;
 
+--  STEP 11: Engagement Within Last 30 Days
+SELECT COUNT(*) * 100.0 / (SELECT COUNT(*) FROM most_Accepted)
+FROM marketing_data
+WHERE Recency <= 30 AND ID IN (SELECT id FROM most_Accepted);
 
+--  STEP 12: Purchase Behavior of Loyal Customers
+SELECT ma.id, Education, Marital_Status,
+       SUM(Income) AS total_income,
+       SUM(NumDealsPurchases) AS total_discount,
+       SUM(NumWebPurchases) AS total_webpurchase,
+       SUM(NumCatalogPurchases) AS total_catalog,
+       SUM(NumStorePurchases) AS total_storepurchase,
+       SUM(NumWebVisitsMonth) AS total_webvisit
+FROM most_Accepted ma
+LEFT JOIN marketing_data md ON ma.id = md.id
+GROUP BY ma.id, Education, Marital_Status
+ORDER BY total_income DESC;
 
-   --checking for % of customers that accepted more than 2 comp and accepted comp6
-  select count(id)* 100.0 / (select count (id) from marketing_data where AcceptedCmp6 = 1)
-  from most_Accepted
+--  STEP 13: RFM Segmentation - Web Shoppers
+CREATE VIEW RFM_WEB AS
+WITH highest_income AS (
+  SELECT * FROM marketing_data
+  WHERE Income > (SELECT AVG(Income) FROM marketing_data)
+),
+recency AS (
+  SELECT * FROM marketing_data WHERE Recency <= 30
+),
+frequency_webvisit AS (
+  SELECT * FROM marketing_data
+  WHERE NumWebVisitsMonth > (SELECT AVG(NumWebVisitsMonth) FROM marketing_data)
+),
+frequency_storepurchase AS (
+  SELECT * FROM marketing_data
+  WHERE NumStorePurchases > (SELECT AVG(NumStorePurchases) FROM marketing_data)
+)
+SELECT i.id
+FROM highest_income i
+JOIN recency r ON i.id = r.id
+JOIN frequency_webvisit f ON r.id = f.id
+JOIN frequency_storepurchase s ON f.id = s.id;
 
+--  STEP 14: RFM Segmentation - In-Store Shoppers
+CREATE VIEW RFM_store AS
+WITH highest_income AS (
+  SELECT * FROM marketing_data
+  WHERE Income < (SELECT AVG(Income) FROM marketing_data)
+),
+recency AS (
+  SELECT * FROM marketing_data WHERE Recency >= 30
+),
+frequency_webvisit AS (
+  SELECT * FROM marketing_data
+  WHERE NumWebVisitsMonth < (SELECT AVG(NumWebVisitsMonth) FROM marketing_data)
+),
+frequency_storepurchase AS (
+  SELECT * FROM marketing_data
+  WHERE NumStorePurchases < (SELECT AVG(NumStorePurchases) FROM marketing_data)
+)
+SELECT i.id
+FROM highest_income i
+JOIN recency r ON i.id = r.id
+JOIN frequency_webvisit f ON r.id = f.id
+JOIN frequency_storepurchase s ON f.id = s.id;
 
-  
-select count(*)* 100.0 / (select count(*)  from most_Accepted )
-  from  marketing_data ma 
-where Recency <= 30 and id in (select id from most_Accepted)
----percentage of people that made orders in the past 30days
-with total_no as (
-select count(*) as cnt from most_Accepted mo
-left join marketing_data  md on md.ID =mo.id
-where Recency <= 30 and md.ID in (select md.ID from most_Accepted)),
+--  STEP 15: Compare Customer Segments
+SELECT * FROM RFM_WEB Rw
+LEFT JOIN marketing_data md ON Rw.id = md.ID;
 
-no_accepted as (
-select count(*) as cnt1 from most_Accepted)
+SELECT * FROM RFM_store Rw
+LEFT JOIN marketing_data md ON Rw.id = md.ID;
 
-select cnt *100.0 /  cnt1 
-from total_no
-cross join no_accepted
+--  STEP 16: Identify Non-RFM Customers
+SELECT * FROM marketing_data
+WHERE ID NOT IN (SELECT ID FROM RFM_WEB)
+AND ID NOT IN (SELECT ID FROM RFM_store);
 
+--  STEP 17: Recency Ranking
+SELECT ID, MIN(Recency) AS min_recency
+FROM marketing_data
+GROUP BY ID
+ORDER BY min_recency DESC;
 
+-----MAIN QUERY TO SOLVE THE PROBLEM
 
-SELECT ma.id,Education,Marital_Status,
-sum(Income)as total_income,  sum(NumDealsPurchases) as total_discount,
-       sum(numwebpurchases) as total_webpurchase,
-	   sum(NumCatalogPurchases) as total_catelog,
-	   sum(NumStorePurchases) as total_storepurchase,
-	   sum(NumWebVisitsMonth) as total_webvisit from most_Accepted ma
-left join marketing_data  md  on ma.id = md.id
- group by ma.id,Education,Marital_Status
- order by total_income desc
+create view main_query as 
+select * from main_query
+create view new_targets as 
 
- select sum(NumWebVisitsMonth)as cnt,sum(Income)as income,sum(NumStorePurchases)as store,
- sum(numwebpurchases) as webp from most_Accepted ma
- left join marketing_data  md on md.id = ma.id
-where Recency <=30 
-
-with cte as (
-select * from marketing_data 
-where id not in (select id from most_Accepted))
-
-select avg(income)  from cte
-
-
-create view RFM_WEB as 
----checking for income greater than the average income
-with highest_income as (
-select * from marketing_data
-where income >
-(select avg(income)  from marketing_data)),--------average income
-
-----checking for recency for the last 30days
-recency as(
-select * from marketing_data
-where recency  <= 30),
-
----checking RFM
-frequency_webvisit as (--------frequency of webvisited
-select * from marketing_data
-where NumWebVisitsMonth >-----greater than average
-(select avg(numwebvisitsmonth) from marketing_data )),
-
-frequency_storepurhase as (--------------frequency of storepurchase
-select * from marketing_data
-where NumStorePurchases >(---greater than average
-select avg(NumStorePurchases) from marketing_data))
-
-select i.id from highest_income i
-join recency r on i.id = r.id
-join frequency_webvisit f on r.id = f.id
-join frequency_storepurhase s on f.id =s.id
-
-
-create view RFM_store as 
----checking for income less than the average income
-with highest_income as (
-select * from marketing_data
-where income <
-(select avg(income)  from marketing_data)),--------average income
-
-----checking for recency  for more than 30days 
-recency as(
-select * from marketing_data
-where recency  >= 30),
-
----checking RFM
-frequency_webvisit as (--------frequency of webvisited
-select * from marketing_data
-where NumWebVisitsMonth <--- less than the average
-(select avg(numwebvisitsmonth) from marketing_data )),
-
-frequency_storepurhase as (--------------frequency of storepurchase
-select * from marketing_data
-where NumStorePurchases <(---less than average
-select avg(NumStorePurchases) from marketing_data))
-
-select i.id from highest_income i
-join recency r on i.id = r.id
-join frequency_webvisit f on r.id = f.id
-join frequency_storepurhase s on f.id =s.id
-
-
-/*checking for behaviour of customers that had income greater than average,
-recency for the last 30days,visted the web greater than the avereage,
-and number of purchase instore greater than average*/
-select * from RFM_WEB Rw
-left join marketing_data md
-ON Rw.id = md.ID
-
-/*checking for behaviour of customers that had income lesser than average,
-recency for mare than 30days,visted the store lesser than the avereage,
-and number of purchase instore lesser than average*/
-select * from RFM_store Rw
-left join marketing_data md
-ON Rw.id = md.ID
-
-
-
-  
-
-select * from marketing_data
-where ID not in (select ID from RFM_WEB) 
-and  ID not in (select id from RFM_WEB2)
-
-
-
-
-select id,min(recency)as min from marketing_data
-group by id
-order by min desc
-
-
-
-
+-- Step 1: Aggregating RFM Data
 WITH AggregatedData AS (
     SELECT 
         ID,
@@ -241,9 +189,10 @@ WITH AggregatedData AS (
         SUM(NumStorePurchases + NumWebPurchases + NumCatalogPurchases) AS Frequency,
         SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) AS Monetary
     FROM marketing_data
-    GROUP BY ID----checking for RFM data
-),
+    GROUP BY ID
+), 
 
+-- Step 2: Calculating Percentile Values for Binning
 percentile_values AS (
     SELECT 
         DISTINCT 
@@ -259,92 +208,133 @@ percentile_values AS (
         PERCENTILE_CONT(0.4) WITHIN GROUP (ORDER BY Recency) OVER () AS p40_r,
         PERCENTILE_CONT(0.6) WITHIN GROUP (ORDER BY Recency) OVER () AS p60_r,
         PERCENTILE_CONT(0.8) WITHIN GROUP (ORDER BY Recency) OVER () AS p80_r
-       FROM AggregatedData),-------grouping them in different bins
-	   
+    FROM AggregatedData
+),
+
+-- Step 3: Segmenting Customers Based on RFM Values
 rfm_segments AS (
-SELECT a.ID, a.Recency, a.Frequency, a.Monetary,
-CASE WHEN a.Monetary <= p.p20_m THEN 1
-     WHEN a.Monetary <= p.p40_m THEN 2
-     WHEN a.Monetary <= p.p60_m THEN 3
-     WHEN a.Monetary <= p.p80_m THEN 4
-     ELSE 5 END AS Monetary_Segment,
-	 CASE 
-WHEN a.Frequency <= p.p20_f THEN 1
-WHEN a.Frequency <= p.p40_f THEN 2
-WHEN a.Frequency <= p.p60_f THEN 3
-WHEN a.Frequency <= p.p80_f THEN 4
-ELSE 5
-END AS Frequency_Segment,
-CASE 
-               WHEN a.Recency <= p.p20_r THEN 5
-               WHEN a.Recency <= p.p40_r THEN 4
-               WHEN a.Recency <= p.p60_r THEN 3
-               WHEN a.Recency <= p.p80_r THEN 2
-               ELSE 1
-           END AS Recency_Segment
+    SELECT 
+        a.ID, 
+        a.Recency, 
+        a.Frequency, 
+        a.Monetary,
+        CASE 
+            WHEN a.Monetary <= p.p20_m THEN 1
+            WHEN a.Monetary <= p.p40_m THEN 2
+            WHEN a.Monetary <= p.p60_m THEN 3
+            WHEN a.Monetary <= p.p80_m THEN 4
+            ELSE 5 
+        END AS Monetary_Segment,
+        CASE 
+            WHEN a.Frequency <= p.p20_f THEN 1
+            WHEN a.Frequency <= p.p40_f THEN 2
+            WHEN a.Frequency <= p.p60_f THEN 3
+            WHEN a.Frequency <= p.p80_f THEN 4
+            ELSE 5
+        END AS Frequency_Segment,
+        CASE 
+            WHEN a.Recency <= p.p20_r THEN 5
+            WHEN a.Recency <= p.p40_r THEN 4
+            WHEN a.Recency <= p.p60_r THEN 3
+            WHEN a.Recency <= p.p80_r THEN 2
+            ELSE 1
+        END AS Recency_Segment
     FROM AggregatedData a
-    CROSS JOIN percentile_values p),---Segmenting them base on RFM
-score as (
-	select id,Monetary_Segment+Frequency_Segment+Recency_Segment as score 
-	from rfm_segments),
+    CROSS JOIN percentile_values p
+),
 
-customer_segments as (
-select id,
-case  when score >=14 then 'High value customers'
-      when score between 10 and 13 then 'Loyal customers'
-	  else 'Average customers' end as customer_segment
-from score),----segmenting customers base on values 
+-- Step 4: Calculating RFM Scores
+score AS (
+    SELECT 
+        id,
+        Monetary_Segment + Frequency_Segment + Recency_Segment AS score 
+    FROM rfm_segments
+),
 
-not_average_customers as (
-select c.id from customer_segments c
-join marketing_data m on c.ID= m.id
-where customer_segment in ('loyal customers','high value customers')
-and AcceptedCmp6= 1 ),-----number of loyal and high value customers
+-- Step 5: Classifying Customer Segments Based on RFM Scores
+customer_segments AS (
+    SELECT 
+        id,
+        CASE  
+            WHEN score >= 14 THEN 'High value customers'
+            WHEN score BETWEEN 10 AND 13 THEN 'Loyal customers'
+            ELSE 'Average customers' 
+        END AS customer_segment
+    FROM score
+),
 
-accepted_more as (
-select a.id from not_average_customers a
-join most_Accepted m on a.id= m.id),---customers that accepted campaign 6 and more 
+-- Step 6: Identifying Loyal and High-Value Customers Who Accepted Campaign 6
+not_average_customers AS (
+    SELECT c.id 
+    FROM customer_segments c
+    JOIN marketing_data m ON c.ID = m.id
+    WHERE customer_segment IN ('Loyal customers', 'High value customers')
+    AND AcceptedCmp6 = 1
+),
 
-accepted_cmp6 as (
-select id from not_average_customers
-where id not in
-(select id from most_Accepted)),---customres that didnt accept campaing 6 and more
+-- Step 7: Identifying Customers Who Accepted Campaign 6 and More
+accepted_more AS (
+    SELECT a.id 
+    FROM not_average_customers a
+    JOIN most_Accepted m ON a.id = m.id
+),
 
+-- Step 8: Identifying Customers Who Accepted Only Campaign 6
+accepted_cmp6 AS (
+    SELECT id 
+    FROM not_average_customers
+    WHERE id NOT IN (SELECT id FROM most_Accepted)
+),
 
- highest_purchase as (
-select id,SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) AS Monetary
+-- Step 9: Identifying Customers with High Purchase in the Last 30 Days
+highest_purchase AS (
+    SELECT 
+        id, 
+        SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) AS Monetary
     FROM marketing_data 
-	where recency <30----getting new customers to target base on highest purchase
-	group by id 
-	having SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds)>2000
-	),
-highest_income as (
-	select id,sum(income) as income from marketing_data
-	group by id
-	having  sum(income) >90000----getting new customers to target base on income above 90,00
-	),
- union_id as (
-select id from highest_purchase 
-union 
-select id from highest_income),---combining both highest purchase and highest income together 
+    WHERE Recency < 30
+    GROUP BY id
+    HAVING SUM(MntWines + MntMeatProducts + MntFishProducts + MntSweetProducts + MntGoldProds) > 2000
+),
 
-added_customers as (
-select id from union_id 
-where id not in (select id from marketing_data
-where AcceptedCmp6=1))-------number of new customers to be added to targeted customers
+-- Step 10: Identifying Customers with Income Greater Than 90,000
+highest_income AS (
+    SELECT 
+        id, 
+        SUM(Income) AS Income 
+    FROM marketing_data
+    GROUP BY id
+    HAVING SUM(Income) > 90000
+),
 
+-- Step 11: Combining High Purchase and High Income Customers
+union_id AS (
+    SELECT id FROM highest_purchase 
+    UNION 
+    SELECT id FROM highest_income
+),
 
-select m.ID from marketing_data m
-where m.AcceptedCmp6 =1
-union 
-select id from added_customers ---total number of targeted pontential customers to accept next campaign
+-- Step 12: Identifying New Customers to Add to the Targeted Campaign
+added_customers AS (
+    SELECT id 
+    FROM union_id 
+    WHERE id NOT IN (
+        SELECT id FROM marketing_data WHERE AcceptedCmp6 = 1
+    )
+)
 
+-- Step 13: Final Result: List of Customers to Be Added to the Targeted Campaign
+SELECT id
+FROM added_customers 
+union
+select id from marketing_data
+where AcceptedCmp6=1
 
+select * from new_targets
 
-
-
-
-
+select sum(cast( AcceptedCmp1 as int)) as AcceptedCmp1  ,sum(cast( AcceptedCmp2 as int)) as AcceptedCmp2 ,
+sum(cast( AcceptedCmp3 as int)) as AcceptedCmp3 ,sum(cast( AcceptedCmp4 as int)) as AcceptedCmp4 ,
+sum(cast( AcceptedCmp5 as int)) as AcceptedCmp5,sum(cast( AcceptedCmp6 as int))as AcceptedCmp6 from marketing_data
 
 
 
